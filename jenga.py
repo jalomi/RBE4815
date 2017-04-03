@@ -46,7 +46,8 @@ def main():
             m = cv2.moments(contour)
             cX = int(m["m10"] / m["m00"])
             cY = int(m["m01"] / m["m00"])
-            cv2.putText(image, decoded.data, (cX-15, cY+15), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,255), 5)
+            cv2.circle(image, (cX,cY), 7, (0,255,0), -1)
+            cv2.putText(image, decoded.data, BL, cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,255), 5)
 
 
             total = total + 1
