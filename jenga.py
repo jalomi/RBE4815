@@ -7,6 +7,10 @@ from picamera.array import PiRGBArray
 from time import sleep
 import BaseHTTPServer
 
+"""
+Author: John Lomi
+"""
+
 #setup camera
 capture = None
 
@@ -26,7 +30,7 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 # Convert to greyscale
                 grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-                # Use PIL to convert into a ndary array
+                # Convert to PIL image
                 pil = Image.fromarray(grey)
 
                 # Setup scanner
@@ -40,10 +44,12 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                     TL, BL, BR, TR = decoded.position
                     contour = np.array([np.array([TL, BL, BR, TR], dtype=np.int32)])
                     cv2.drawContours(image, contour, 0, (0,0,255), 5)
+                    #draw dot at center
                     m = cv2.moments(contour)
                     cX = int(m["m10"] / m["m00"])
                     cY = int(m["m01"] / m["m00"])
                     cv2.circle(image, (cX,cY), 7, (0,255,0), -1)
+                    #draw label
                     cv2.putText(image, decoded.data, BL, cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,255), 5)
 
                     results.append((cX, cY, decoded.data))
@@ -53,6 +59,7 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 key = cv2.waitKey(1) & 0xFF
                 rawCap.truncate(0)
 
+                #return the position and value of every QR code
                 self.wfile.write(results)
 
         except KeyboardInterrupt:
@@ -67,6 +74,7 @@ def initializeCamera():
 
     rawCap = PiRGBArray(camera, size=(1280, 720))
 
+    #sleep to allow camera to warm up
     sleep(.5)
 
 
@@ -83,14 +91,17 @@ def serverInit():
 def main():
     initializeCamera()
 
+    #start server process
     server = Process(target=serverInit)
     server.start()
 
+    #wait for Ctrl-C
     try:
         while(1):
             pass
     except KeyboardInterrupt:
         pass
+
 
     server.join()
 
