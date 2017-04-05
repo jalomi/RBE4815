@@ -28,8 +28,6 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
                 # Use PIL to convert into a ndary array
                 pil = Image.fromarray(grey)
-                width, height = pil.size
-                #image = zbar.Image(width, height, 'Y800', image.tostring())
 
                 # Setup scanner
                 scanner = zbar.Scanner()
