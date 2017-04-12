@@ -7,6 +7,7 @@ from picamera.array import PiRGBArray
 from time import sleep
 import BaseHTTPServer
 import abb
+import socket
 
 """
 Author: John Lomi
@@ -73,22 +74,35 @@ def takePictureQR():
 
 def main():
     #define camera settings
-    initializeCamera()
+    #initializeCamera()
 
     #find tower in workspace
 
     #scan tower
 
 
+    ### TEST SOCKET ###
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect('', 5001)
+    s.send("Hello!")
+    data = s.recv(1024)
+    s.close()
+    print(data)
+    
+    print("Done")
+    return
+    
     #loop until game over
     turn = 0
-    while(!gameOver):
+    while not gameOver:
         #if robot's turn
         if(turn % 2 == 0):
+            pass
             #choose block to pick
 
         #if human's turn
         else:
+            pass
             #wait for block numer
 
 
