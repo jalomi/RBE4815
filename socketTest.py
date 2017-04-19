@@ -4,6 +4,7 @@ from time import sleep
 import abb
 
 
+
 def main():
 	 ### TEST SOCKET ###
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -12,7 +13,7 @@ def main():
     try:
     	s.bind(('',5515))
     except socket.error as msg:
-    	print(str(msg[0]))
+    	print(str(msg[0]) + ":" + msg[1])
 
     print("Socket binded")
 
@@ -20,9 +21,14 @@ def main():
 
     print("Socket listening")
 
-    while True:
-    	conn, addr = s.accept()
-    	print("Connected: " + addr[0] + ":" + str(addr[1])
+    conn, addr = s.accept()
+    print("Connected: " + addr[0] + ":" + str(addr[1])
+
+    s.send("home% #")
+
+    data = s.recv(1024)
+    print(data)
+
 
     s.close()
 
