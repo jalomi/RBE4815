@@ -5,7 +5,6 @@ import zbar
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from time import sleep
-import BaseHTTPServer
 import abb
 import socket
 
@@ -74,7 +73,7 @@ def takePictureQR():
 
 def main():
     #define camera settings
-    #initializeCamera()
+    initializeCamera()
 
     #find tower in workspace
 
