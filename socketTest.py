@@ -1,5 +1,5 @@
 import socket
-import numpy as np
+import sys
 from time import sleep
 import abb
 
@@ -7,13 +7,33 @@ import abb
 def main():
 	 ### TEST SOCKET ###
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect('', 5001)
-    s.send("Hello!")
-    data = s.recv(1024)
+    print("Socket created")
+
+    try:
+    	s.bind(('',5515))
+    except socket.error as msg:
+    	print(str(msg[0]))
+
+    print("Socket binded")
+
+    s.listen(10)
+
+    print("Socket listening")
+
+    while True:
+    	conn, addr = s.accept()
+    	print("Connected: " + addr[0] + ":" + str(addr[1])
+
     s.close()
-    print(data)
+
+
+    # s.connect('', 5001)
+    # s.send("Hello!")
+    # data = s.recv(1024)
+    # s.close()
+    # print(data)
     
-    print("Done")
+    # print("Done")
     return
 
 
