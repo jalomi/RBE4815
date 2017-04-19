@@ -25,13 +25,18 @@ MODULE ServerMike
     PERS string ipController:= "192.168.125.1"; !local IP for testing in simulation
     PERS num serverPort:= 5515;
     
+    !Motion
     VAR bool moveCompleted; !true if move successful
+    VAR robtarget cartesianTarget;
+    VAR jointtarget jointsTarget;
     
     !Procedure for parsing incoming string
     !strings should be the desired type of command followed by % then a space and the params each followed by a space and the end character is a #
-    !EXAMPLE STRING: "home% 10 20 50 105 105 13 15 #"
+    !EXAMPLE STRING: "home% 10, 20, 50, 105, 105, 13, 15,#"
     VAR string params{9}; !collection of parameters for movement goes up to 8 cuz the python lib had something similar plus one for end character to indicate end of params
     VAR string commandType;
+    VAR num numParams:= 0; !number of paramters
+    
     PROC ParseString(string msg) 
         VAR num barrier;
         VAR num search;
@@ -50,7 +55,7 @@ MODULE ServerMike
             current := StrPart(msg,search,1); !looks after where search is set
             IF current = " " THEN
                 startParam := search + 1; !go to after " "
-                endParam := StrFind(msg,startParam+1," "); !returns the next instance of a space (needs +1 or it will just see the one it already grabbed
+                endParam := StrFind(msg,startParam,","); !returns the next instance of a space (needs +1 or it will just see the one it already grabbed
                 IF endParam = length+1 THEN
                     !Do nothing this means that we are at the end and another " " couldnt be found after the last one
                 ELSE
@@ -59,6 +64,7 @@ MODULE ServerMike
                 ENDIF
             ELSEIF current = "#" THEN
                 params{paramLevel} := "#";
+                numParams := paramLevel-1;
                 end := TRUE;
             ENDIF
             Incr search; !keep incrementing search 
@@ -142,11 +148,24 @@ MODULE ServerMike
             TEST commandType
                 CASE "home": !home the robot
                     TPWrite "Homing robot...";
-                    !add code
+                    
+                    cartesianTarget := [[1000,0,1000],[0,0,1,0],[0,0,0,0],externalAxis];
+                    moveCompleted := FALSE;
+                    MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                    moveCompleted := TRUE;
+                    
                     TPWrite "Homing Successful";
                 CASE "cmove": !cartesian move
                     TPWrite "Cartesian moving...";
-                    !add code
+                    !make sure we got enough params
+                    IF numParams = 7 THEN
+                        cartesianTarget := [[params{1},params{2},params{3}],[params{4},params{5},params{6},params{7}],[0,0,0,0],externalAxis];
+                        moveCompleted := FALSE;
+                        MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                        moveCompleted := TRUE;
+                    ELSE
+                        TPWrite "Bad msg. Not enough or too many params";
+                    ENDIF
                     TPWrite "Cartesian Movement Successful";
                 CASE "jmove": !joint move
                     TPWrite "Joint moving...";
@@ -178,8 +197,31 @@ MODULE ServerMike
                     !add code
                     TPWrite "Set tool";
                 CASE "setzone": !set zone
+                    TPWrite "Setting Zone...";
+                    !add code
+                    TPWrite "Set zone";
                 CASE "setspeed": !set speed
+                    TPWrite "Setting Speed...";
+                    !add code
+                    TPWrite "Set Speed";
                 CASE "getcart": !get cartesian coordinates
+                    TPWrite "Getting Cartesian Coordinates...";
+                    IF numParams = 0 THEN
+                        cartesianPose := CRobT(\Tool:=currentTool \WObj:= currentWobj);
+                        addToMsg := " x = " + NumToStr(cartesianPose.trans.x,2);
+                        addToMsg := addToMsg + " y = " + NumToStr(cartesianPose.trans.y,2);
+                        addToMsg := addToMsg + " z = " + NumToStr(cartesianPose.trans.z,2);
+                        addToMsg := addToMsg + " q1 = " + NumToStr(cartesianPose.rot.q1,3);
+                        addToMsg := addToMsg + " q2 = " + NumToStr(cartesianPose.rot.q2,3);
+                        addToMsg := addToMsg + " q3 = " + NumToStr(cartesianPose.rot.q3,3);
+                        addToMsg := addToMsg + " q4 = " + NumToStr(cartesianPose.rot.q4,3);
+                        
+                        TPWrite "Cartesian Coordinate is:" + addToMsg;
+                        
+                    ELSE
+                        TPWrite "Bad message, too many params";
+                    ENDIF
+                    
                 CASE "getjoint": !get joint coordinates
                 DEFAULT:
                     TPWrite "Server: Bad Instruction";
