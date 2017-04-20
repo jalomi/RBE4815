@@ -22,9 +22,10 @@ MODULE ServerMike
     VAR socketdev clientSocket;
     VAR socketdev serverSocket;
     
-    PERS string ipController:= "192.168.125.1"; !local IP for testing in simulation
+    PERS string ipController:= "192.168.125.3"; !local IP for testing in simulation
     PERS num serverPort:= 5515;
     
+    VAR extjoint externalAxis;
     !Motion
     VAR bool moveCompleted; !true if move successful
     VAR robtarget cartesianTarget;
@@ -42,7 +43,7 @@ MODULE ServerMike
         VAR num search;
         VAR num length := 0;
         VAR bool end := FALSE;
-        VAR num paramLevel := 0;
+        VAR num paramLevel := 1;
         VAR num startParam;
         VAR num endParam;
         VAR string current;
@@ -75,22 +76,12 @@ MODULE ServerMike
     ! Procedure for socketConnection
     ! basically the same socket connect from open_abb library
     PROC attemptSocketConnect(string ip, num port)
-        VAR string clientIP;
         
-        SocketCreate serverSocket;
-        SocketBind serverSocket, ip, port;
-        SocketListen serverSocket;
-        TPWrite "Server: Server is now waiting for incoming connection.....";
-        WHILE SocketGetStatus(clientSocket) <> SOCKET_CONNECTED DO
-            SocketAccept serverSocket, clientSocket \ClientAddress:= clientIP \Time:= WAIT_MAX;
-            IF SocketGetStatus(clientSocket) <> SOCKET_CONNECTED THEN
-                TPWrite "Server: Problem serving incoming";
-                TPWrite "Server: Try reconnecting";
-            ENDIF
-            !Needs to wait between reconnects
-            WaitTime 0.5;
-        ENDWHILE
-        TPWrite "Server: Connected to " + clientIP;
+        
+        SocketClose clientSocket;
+        SocketCreate clientSocket;
+        SocketConnect clientSocket,ip,port;
+        TPWrite "Client: Client connected";
     ENDPROC
     
     !FROM open_abb lib
@@ -126,6 +117,8 @@ MODULE ServerMike
         VAR bool connected; !says if if cliet connected
         VAR robtarget cartesianPose;
         VAR jointtarget jointsPose;
+        VAR num coors{9};
+        VAR bool ok;
         
         !Motion Config
         ConfL \Off;
@@ -159,7 +152,16 @@ MODULE ServerMike
                     TPWrite "Cartesian moving...";
                     !make sure we got enough params
                     IF numParams = 7 THEN
-                        cartesianTarget := [[params{1},params{2},params{3}],[params{4},params{5},params{6},params{7}],[0,0,0,0],externalAxis];
+                        !convert string values into num values
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        ok := StrToVal(params{3},coors{3});
+                        ok := StrToVal(params{4},coors{4});
+                        ok := StrToVal(params{5},coors{5});
+                        ok := StrToVal(params{6},coors{6});
+                        ok := StrToVal(params{7},coors{7});
+                        
+                        cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
                         moveCompleted := FALSE;
                         MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                         moveCompleted := TRUE;
@@ -167,9 +169,17 @@ MODULE ServerMike
                         TPWrite "Bad msg. Not enough or too many params";
                     ENDIF
                     TPWrite "Cartesian Movement Successful";
-                CASE "jmove": !joint move
+                CASE "jmove": !joint move (just homes rn)
                     TPWrite "Joint moving...";
-                    !add code
+                     IF numParams = 6 THEN
+                        jointsTarget:=[[0,0,0,0,0,0], externalAxis];
+                        
+                        moveCompleted := FALSE;
+                        MoveAbsJ jointsTarget, currentSpeed, currentZone, currentTool \Wobj:=currentWobj;
+                        moveCompleted := TRUE;
+                    ELSE
+                        TPWrite "Bad msg. Not enough or too many params";
+                    ENDIF
                     TPWrite "Joint Movement Successful";
                 CASE "circmove": !circular move
                     TPWrite "Circle moving...";
@@ -186,7 +196,7 @@ MODULE ServerMike
                     !add code
                     TPWrite "Poked";
                     !if too dangerous
-                    TPWrite "Too dangerous, pulling out...."
+                    TPWrite "Too dangerous, pulling out....";
                     TPWrite "Pulled Out";
                 CASE "setwobj": !set workobject
                     TPWrite "Setting workobject...";
@@ -224,7 +234,7 @@ MODULE ServerMike
                     
                 CASE "getjoint": !get joint coordinates
                 DEFAULT:
-                    TPWrite "Server: Bad Instruction";
+                    TPWrite "Client: Received Bad Instruction";
                     commandType := "home"; !home the robot by default
             ENDTEST
             

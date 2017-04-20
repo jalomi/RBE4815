@@ -21,12 +21,13 @@ def main():
 
     print("Socket listening")
 
+
     conn, addr = s.accept()
-    print("Connected: " + addr[0] + ":" + str(addr[1])
+    print("Connected: " + addr[0] + ":" + str(addr[1]))
+   
+    conn.send("jmove% 0, 0, 0, 0, 0, 0,#")
 
-    s.send("home% #")
-
-    data = s.recv(1024)
+    data = conn.recv(1024)
     print(data)
 
 
