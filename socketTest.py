@@ -24,8 +24,11 @@ def main():
 
     conn, addr = s.accept()
     print("Connected: " + addr[0] + ":" + str(addr[1]))
+
+    msg = "jmove% 0, 0, 0, 0, 0, 0,#"
    
-    conn.send("jmove% 0, 0, 0, 0, 0, 0,#")
+    conn.send(msg)
+    print(msg)
 
     data = conn.recv(1024)
     print(data)
