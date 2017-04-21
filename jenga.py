@@ -5,7 +5,6 @@ import zbar
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from time import sleep
-import abb
 import socket
 
 """
@@ -124,7 +123,7 @@ def moveToCode(val, blocks):
     val -- the code value to move to
     blocks -- the locations of all the blocks in the tower
     """
-    #find code in main array
+    #find QR code in main array
 
     #move to selected position
 
@@ -133,6 +132,9 @@ def moveToCode(val, blocks):
 
 def scanTower():
     """Use camera to generate matrix to represent block posistions"""
+    #this is just a placeholder.  It should move the arm up the tower and
+    #use takePictureQR to generate this matrix of codes.  This is supposed
+    #to be like a map of the blocks
     tower = [[1, 2, 3],
             [4, 5, 6],
             [7, 8, 9],
@@ -165,6 +167,11 @@ def scanTower():
 def main():
     """Algorithm to play Jenga using the ABB arm"""
     global arm, comp
+
+    """
+    Use arm.send() and comp.send() to send stuff
+    Use arm.recv() and comp.recv() to recieve stuff
+    """
 
     #start servers
     initializeServers()
