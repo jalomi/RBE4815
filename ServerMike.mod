@@ -14,7 +14,8 @@ MODULE ServerMike
     
     !//Robot configuration
     PERS tooldata currentTool := [TRUE,[[0,0,0],[1,0,0,0]],[0.001,[0,0,0.001],[1,0,0,0],0,0,0]];    
-    PERS wobjdata currentWobj := [FALSE,TRUE,"",[[0,0,0],[1,0,0,0]],[[0,0,0],[1,0,0,0]]];   
+    PERS wobjdata currentWobj := [FALSE,TRUE,"",[[0,0,0],[1,0,0,0]],[[0,0,0],[1,0,0,0]]];
+    PERS wobjdata pokerWobj := [FALSE,TRUE,"",[[0,0,0],[1,0,0,0]],[[0,0,0],[1,0,0,0]]];
     PERS speeddata currentSpeed;
     PERS zonedata currentZone;
     
@@ -24,6 +25,12 @@ MODULE ServerMike
     
     PERS string ipController:= "192.168.125.3"; !local IP for testing in simulation
     PERS num serverPort:= 5515;
+    
+    !Jenga block dimensions
+    PERS num towerOffset := 75; !75mm offset from gripper to tower distance at start of approach
+    PERS num length := 75; !block length
+    PERS num width := 25; !block width
+    
     
     VAR extjoint externalAxis;
     !Motion
@@ -119,6 +126,8 @@ MODULE ServerMike
         VAR jointtarget jointsPose;
         VAR num coors{9};
         VAR bool ok;
+        VAR num pokeCount := 0; !number of times its checked with pi for limit
+        VAR bool triggered := FALSE;
         
         !Motion Config
         ConfL \Off;
@@ -148,6 +157,7 @@ MODULE ServerMike
                     moveCompleted := TRUE;
                     
                     TPWrite "Homing Successful";
+                    
                 CASE "cmove": !cartesian move
                     TPWrite "Cartesian moving...";
                     !make sure we got enough params
@@ -169,10 +179,19 @@ MODULE ServerMike
                         TPWrite "Bad msg. Not enough or too many params";
                     ENDIF
                     TPWrite "Cartesian Movement Successful";
+                    
                 CASE "jmove": !joint move (just homes rn)
                     TPWrite "Joint moving...";
                      IF numParams = 6 THEN
-                        jointsTarget:=[[0,0,0,0,0,0], externalAxis];
+                        !convert string values into num values
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        ok := StrToVal(params{3},coors{3});
+                        ok := StrToVal(params{4},coors{4});
+                        ok := StrToVal(params{5},coors{5});
+                        ok := StrToVal(params{6},coors{6});
+                        s
+                        jointsTarget:=[[coors{1},coors{2},coors{3},coors{4},coors{5},coors{6}], externalAxis];
                         
                         moveCompleted := FALSE;
                         MoveAbsJ jointsTarget, currentSpeed, currentZone, currentTool \Wobj:=currentWobj;
@@ -192,28 +211,228 @@ MODULE ServerMike
                     !in other side of if
                     TPWrite "Released";
                 CASE "poke": !poke tower
-                    TPWrite "Poking...";
-                    !add code
-                    TPWrite "Poked";
-                    !if too dangerous
-                    TPWrite "Too dangerous, pulling out....";
-                    TPWrite "Pulled Out";
-                CASE "setwobj": !set workobject
+                    TPWrite "Poke commencing...";
+                    !initial positioning in front of block
+                    IF numParams = 8 and pokeCount = 0 THEN
+                        !convert string values into num values
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        ok := StrToVal(params{3},coors{3});
+                        ok := StrToVal(params{4},coors{4});
+                        ok := StrToVal(params{5},coors{5});
+                        ok := StrToVal(params{6},coors{6});
+                        ok := StrToVal(params{7},coors{7});
+                        
+                        cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
+                        moveCompleted := FALSE;
+                        MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=pokerWobj;
+                        moveCompleted := TRUE;
+                        TPWrite "Moved in front of block";
+                        !Wait for a little before poking
+                        WaitTime 0.5;
+                    ELSE
+                        TPWrite "Bad msg. Not enough or too many params";
+                    ENDIF
+                    
+                    !while for pokecount to make small movements to test poke
+                    !need to set the pokerwobj before doing this
+                    !will need to adjust so that when moving cartesian is accurate (set pokerwobj to corner of tower)
+                    !at a poke count of 3 the while stops
+                    WHILE pokeCount <> 3 DO
+                        IF pokeCount = 0 AND triggered = FALSE THEN !move up to the edge of the tower
+                            !check if poke is occuring along x or y
+                            !tower will have to be placed so that its parallel to the axis of the wobj
+                            IF params{8} = "y" THEN
+                                coors{2} := coors{2} + towerOffset; ! might need to be subtracting depending on directions
+                            ELSEIF params{8} = "x" THEN
+                                coors{1} := coors{1} + towerOffset; ! might need to be subtracting depending on directions
+                            ELSE
+                                TPWrite "Do not recognize poke direction";
+                            ENDIF
+                            cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=pokerWobj;
+                            moveCompleted := TRUE;
+                            !send message asking for triggered update
+                            sendMsg := "triggered";
+                            SocketSend clientSocket \Str:=sendMsg;
+                            SocketReceive clientSocket \Str:=receivedMsg \Time:=WAIT_MAX;
+                            IF receivedMsg = "true" THEN
+                                triggered := TRUE;
+                            ENDIF
+                            
+                        ELSEIF pokeCount = 1 AND triggered = FALSE THEN
+                            !move slightly further to engage more poke
+                            IF params{8} = "y" THEN
+                                coors{2} := coors{2} + 1; ! might need to be subtracting depending on directions
+                            ELSEIF params{8} = "x" THEN
+                                coors{1} := coors{1} + 1; ! might need to be subtracting depending on directions
+                            ELSE
+                                TPWrite "Do not recognize poke direction";
+                            ENDIF
+                            cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=pokerWobj;
+                            moveCompleted := TRUE;
+                            !send message asking for triggered update
+                            sendMsg := "triggered";
+                            SocketSend clientSocket \Str:=sendMsg;
+                            SocketReceive clientSocket \Str:=receivedMsg \Time:=WAIT_MAX;
+                            IF receivedMsg = "true" THEN
+                                triggered := TRUE;
+                            ENDIF
+                        ELSEIF pokeCount = 2 AND triggered = FALSE THEN
+                            !move for full poke
+                            IF params{8} = "y" THEN
+                                !move by half block size minus the 1 mm from first poke attempt
+                                coors{2} := coors{2} + 36.5; ! might need to be subtracting depending on directions
+                            ELSEIF params{8} = "x" THEN
+                                !move by half block size minus the 1 mm from first poke attempt
+                                coors{1} := coors{1} + 36.5; ! might need to be subtracting depending on directions
+                            ELSE
+                                TPWrite "Do not recognize poke direction";
+                            ENDIF
+                            cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=pokerWobj;
+                            moveCompleted := TRUE;
+                            !send message asking for triggered update
+                            sendMsg := "triggered";
+                            SocketSend clientSocket \Str:=sendMsg;
+                            SocketReceive clientSocket \Str:=receivedMsg \Time:=WAIT_MAX;
+                            IF receivedMsg = "true" THEN
+                                triggered := TRUE;
+                            ENDIF
+                        ELSE
+                            !triggered so needs to go back to before poke
+                            ok := StrToVal(params{1},coors{1});
+                            ok := StrToVal(params{2},coors{2});
+                            cartesianTarget := [[coors{1},coors{2},coors{3}],[coors{4},coors{5},coors{6},coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=pokerWobj;
+                            moveCompleted := TRUE;
+                            
+                        ENDIF
+                        !increment pokeCount
+                        Incr pokeCount;
+                    
+                    ENDWHILE
+                    
+                    TPWrite "Cartesian Movement Successful";
+                    
+                CASE "setwobj": !set workobject with our own coordinates
                     TPWrite "Setting workobject...";
-                    !add code
+                    !grabs coordinates and puts them into currentWobj
+                    IF numParams = 7 THEN
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        ok := StrToVal(params{3},coors{3});
+                        ok := StrToVal(params{4},coors{4});
+                        ok := StrToVal(params{5},coors{5});
+                        ok := StrToVal(params{6},coors{6});
+                        ok := StrToVal(params{7},coors{7});
+                        
+                        currentWobj.oframe.trans.x:=coors{1};
+                        currentWobj.oframe.trans.y:=coors{2};
+                        currentWobj.oframe.trans.z:=coors{3};
+                        currentWobj.oframe.rot.q1:=coors{4};
+                        currentWobj.oframe.rot.q2:=coors{5};
+                        currentWobj.oframe.rot.q3:=coors{6};
+                        currentWobj.oframe.rot.q4:=coors{7};
+                    ELSE
+                       TPWrite "Bad msg. Wrong number of params";
+                    ENDIF
                     TPWrite "Set workobject";
+                    
+                CASE "setwobjCurrent":
+                    TPWrite "Setting workobject at current position...";
+                    !grab current cartesian pose
+                    IF numParams = 1 THEN
+                        IF params{1} = "poker" THEN
+                            cartesianPose := CRobT(\Tool:=currentTool \WObj:= pokerWobj);
+                    
+                            pokerWobj.oframe.trans.x := cartesianPose.trans.x;
+                            pokerWobj.oframe.trans.y := cartesianPose.trans.y;
+                            pokerWobj.oframe.trans.z := cartesianPose.trans.z;
+                            pokerWobj.oframe.rot.q1 := cartesianPose.rot.q1;
+                            pokerWobj.oframe.rot.q2 := cartesianPose.rot.q2;
+                            pokerWobj.oframe.rot.q3 := cartesianPose.rot.q3;
+                            pokerWobj.oframe.rot.q4 := cartesianPose.rot.q4;
+                        ENDIF
+                    
+                        TPWrite "Set pokerWobj at current position";
+                    ELSE
+                        TPWrite "Setting current position to currentWobj";
+                        cartesianPose := CRobT(\Tool:=currentTool \WObj:= currentWobj);
+                    
+                        currentWobj.oframe.trans.x := cartesianPose.trans.x;
+                        currentWobj.oframe.trans.y := cartesianPose.trans.y;
+                        currentWobj.oframe.trans.z := cartesianPose.trans.z;
+                        currentWobj.oframe.rot.q1 := cartesianPose.rot.q1;
+                        currentWobj.oframe.rot.q2 := cartesianPose.rot.q2;
+                        currentWobj.oframe.rot.q3 := cartesianPose.rot.q3;
+                        currentWobj.oframe.rot.q4 := cartesianPose.rot.q4;
+                    ENDIF
+                    
+                    
                 CASE "settool": !set tool coordinates
                     TPWrite "Setting tool...";
                     !add code
                     TPWrite "Set tool";
+                    
                 CASE "setzone": !set zone
                     TPWrite "Setting Zone...";
-                    !add code
+                    !takes 4 params but will look to see if the first param is a "fine" which means fine zone
+                    IF numParams = 4 THEN
+                        IF params{1} = "fine" THEN
+                            currentZone.finep := TRUE;
+                            currentZone.pzone_tcp := 0.0;
+                            currentZone.pzone_ori := 0.0;
+                            currentZone.zone_ori := 0.0;
+                        ELSE
+                            currentZone.finep := FALSE;
+                            ok := StrToVal(params{2},coors{2});
+                            ok := StrToVal(params{3},coors{3});
+                            ok := StrToVal(params{4},coors{4});
+
+                            currentZone.pzone_tcp := coors{2};
+                            currentZone.pzone_ori := coors{3};
+                            currentZone.zone_ori := coors{4};
+                        ENDIF
+                    ELSE
+                        TPWrite "Bad msg, wrong number of params";
+                    ENDIF
+                    
                     TPWrite "Set zone";
+                    
                 CASE "setspeed": !set speed
                     TPWrite "Setting Speed...";
-                    !add code
+                    !need to research how to use this better but this is the current code
+                    IF numParams = 4 THEN
+                        !convert to num
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        ok := StrToVal(params{3},coors{3});
+                        ok := StrToVal(params{4},coors{4});
+                        
+                        currentSpeed.v_tcp:=coors{1};
+                        currentSpeed.v_ori:=coors{2};
+                        currentSpeed.v_leax:=coors{3};
+                        currentSpeed.v_reax:=coors{4};
+                        
+                    ELSEIF nParams = 2 THEN
+                        
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{2});
+                        
+    					currentSpeed.v_tcp:=coors{1};
+    					currentSpeed.v_ori:=coors{2};
+    					
+    				ELSE
+                        TPWrite "Bad msg, wrong number of params";
+                    ENDIF
                     TPWrite "Set Speed";
+                    
                 CASE "getcart": !get cartesian coordinates
                     TPWrite "Getting Cartesian Coordinates...";
                     IF numParams = 0 THEN
@@ -233,6 +452,21 @@ MODULE ServerMike
                     ENDIF
                     
                 CASE "getjoint": !get joint coordinates
+                    TPWrite "Getting Joint Angles...";
+                    IF numParams = 0 THEN
+                        jointsPose := CJointT();
+                        addToMsg := " Joint 1 = " + NumToStr(jointsPose.robax.rax_1,2);
+                        addToMsg := addToMsg + " Joint 2 = " + NumToStr(jointsPose.robax.rax_2,2);
+                        addToMsg := addToMsg + " Joint 3 = " + NumToStr(jointsPose.robax.rax_3,2);
+                        addToMsg := addToMsg + " Joint 4 = " + NumToStr(jointsPose.robax.rax_4,2);
+                        addToMsg := addToMsg + " Joint 5 = " + NumToStr(jointsPose.robax.rax_5,2);
+                        addToMsg := addToMsg + " Joint 6 = " + NumToStr(jointsPose.robax.rax_6,2);
+                        
+                        TPWrite "Joint Angles are:" + addToMsg;
+                    ELSE
+                        TPWrite "Bad msg, too many params";
+                    ENDIF
+                    
                 DEFAULT:
                     TPWrite "Client: Received Bad Instruction";
                     commandType := "home"; !home the robot by default
