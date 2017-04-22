@@ -36,7 +36,7 @@ def initializeServers():
     print("Socket listening")
 
 
-    arm, addr1 = s.accept()
+    arm, addr1 = s1.accept()
     print("Arm Connected: " + addr1[0] + ":" + str(addr1[1]))
 
     #connect to computer
@@ -56,7 +56,7 @@ def initializeServers():
     print("Socket listening")
 
 
-    comp, addr2 = s.accept()
+    comp, addr2 = s2.accept()
     print("Comp Connected: " + addr2[0] + ":" + str(addr2[1]))
 
 
