@@ -1,9 +1,9 @@
-import cv2
-import numpy as np
-from PIL import Image
-import zbar
-from picamera import PiCamera
-from picamera.array import PiRGBArray
+#import cv2
+#import numpy as np
+#from PIL import Image
+#import zbar
+#from picamera import PiCamera
+#from picamera.array import PiRGBArray
 from time import sleep
 import socket
 
@@ -21,7 +21,7 @@ def initializeServers():
 
     #Connect to arm
     s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+    
     print("Socket created")
 
     try:
@@ -39,25 +39,26 @@ def initializeServers():
     arm, addr1 = s1.accept()
     print("Arm Connected: " + addr1[0] + ":" + str(addr1[1]))
 
+    
     #connect to computer
-    s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    print("Socket created")
-
-    try:
-        s2.bind(('',5001))
-    except socket.error as msg:
-        print(str(msg[0]) + ":" + msg[1])
-
-    print("Socket binded")
-
-    s2.listen(10)
-
-    print("Socket listening")
-
-
-    comp, addr2 = s2.accept()
-    print("Comp Connected: " + addr2[0] + ":" + str(addr2[1]))
+##    s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+##
+##    print("Socket created")
+##
+##    try:
+##        s2.bind(('',5001))
+##    except socket.error as msg:
+##        print(str(msg[0]) + ":" + msg[1])
+##
+##    print("Socket binded")
+##
+##    s2.listen(10)
+##
+##    print("Socket listening")
+##
+##
+##    comp, addr2 = s2.accept()
+##    print("Comp Connected: " + addr2[0] + ":" + str(addr2[1]))
 
 
 
@@ -115,7 +116,57 @@ def takePictureQR():
 
     return results
 
+def runMultipleCommands():
+    #run various movement messages
+    #msg1 = "setPokeOffset%#"
+    msg2 = "poke% 0, 0, 0, 0, 0, 0, 0, y,#"
+##    msg3 = ""
+##    msg4 = ""
+##    arm.send(msg1)
+##    
+##    data = arm.recv(1024)
+##    print(data)
 
+    arm.send(msg2)
+    data = arm.recv(1024)
+    print(data)
+
+    if data == "trigger":
+        arm.send("false")
+        
+    data = arm.recv(1024)
+    print(data)
+    if data == "trigger":
+        arm.send("false")
+    data = arm.recv(1024)
+    print(data)
+    if data == "trigger":
+        arm.send("false")
+    data = arm.recv(1024)
+    print(data)
+    
+    
+##    arm.send(msg3)
+##    data = arm.recv(1024)
+##    print(data)
+##    
+##    arm.send(msg4)
+##    data = arm.recv(1024)
+##    print(data)
+
+def runSingleCommand(string):
+    arm.send(string)
+    data = arm.recv(1024)
+    print(data)
+
+    
+def triggered():
+    #placeholder for limit switch check
+    while arm.recv(1024) != "complete":
+        #check limit
+        arm.send("false")#placeholder for checking limit
+    print("Poke Completed")
+    
 def moveToCode(val, blocks):
     """Move to where the QR code of value val is suspected to be
 
