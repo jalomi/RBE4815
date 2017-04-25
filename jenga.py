@@ -122,63 +122,6 @@ def takePictureQR():
 
     return results
 
-def runMultipleCommands(string):
-    #run various movement messages
-    #msg1 = "setPokeOffset%#"
-    #poke takes like ColumnxRow
-    
-##    msg3 = ""
-##    msg4 = ""
-##    arm.send(msg1)
-##    
-##    data = arm.recv(1024)
-##    print(data)
-
-    arm.send(string)
-    data = arm.recv(1024)
-    print(data)
-
-    if data == "trigger":
-        arm.send("false")
-        
-    data = arm.recv(1024)
-    print(data)
-    if data == "trigger":
-        arm.send("false")
-    data = arm.recv(1024)
-    print(data)
-    if data == "trigger":
-        arm.send("false")
-    data = arm.recv(1024)
-    print(data)
-
-    msg3 = "moveAround% x,#"
-    arm.send(msg3)
-    data = arm.recv(1024)
-    print(data)
-    
-    
-##    arm.send(msg3)
-##    data = arm.recv(1024)
-##    print(data)
-##    
-##    arm.send(msg4)
-##    data = arm.recv(1024)
-##    print(data)
-
-def runSingleCommand(string):
-    arm.send(string)
-    data = arm.recv(1024)
-    print(data)
-
-    
-def triggered():
-    #placeholder for limit switch check
-    while arm.recv(1024) != "complete":
-        #check limit
-        arm.send("false")#placeholder for checking limit
-    print("Poke Completed")
-    
 
 
 
@@ -215,6 +158,9 @@ def main():
                 arm.send("true")
             else:
                 arm.send("false")
+                comp.send("failed")
+                print("Poke hit limit switch")
+                continue
         
         #check limit switch
         data = arm.recv(1024)
@@ -224,6 +170,9 @@ def main():
                 arm.send("true")
             else:
                 arm.send("false")
+                comp.send("failed")
+                print("Poke hit limit switch")
+                continue
 
         #check limit switch
         data = arm.recv(1024)
@@ -233,54 +182,17 @@ def main():
                 arm.send("true")
             else:
                 arm.send("false")
+                comp.send("failed")
+                print("Poke hit limit switch")
+                continue
 
 
         data = arm.recv(1024)
         print(data)
-        
 
-        # msg3 = "moveAround% x,#"
-        # arm.send(msg3)
-        # data = arm.recv(1024)
-        # print(data)
+        #wait for next instruction
+        #end while
 
-
-
-        # #if gameover, continue
-        # if not codeList:
-        #     gameOver = True
-        #     print("GAMEOVER: No codes found")
-        #     continue 
-
-        # #find desired code
-        # for code in codeList:
-        #     if code[2] == val:
-        #         codeX = code[0]
-        #         codeY = code[1]
-        #         break
-        # else:
-        #     gameOver = True
-        #     print("GAMEOVER: Code not in image")
-        #     continue
-
-        # #make adjustments
-        # diffX = codeX - 640
-        # diffY = codeY - 360
-
-        #push
-
-        #rotate
-
-        #pull
-
-        #drop
-
-        #grab lengthwise
-
-        #place on top of tower
-
-        #return to start position
-        arm.send("home% #")
 
 
 
