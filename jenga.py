@@ -1,15 +1,21 @@
-#import cv2
-#import numpy as np
-#from PIL import Image
-#import zbar
-#from picamera import PiCamera
-#from picamera.array import PiRGBArray
+import cv2
+import numpy as np
+from PIL import Image
+import zbar
+from picamera import PiCamera
+from picamera.array import PiRGBArray
 from time import sleep
 import socket
+import RPi.GPIO as GPIO
 
 """
 Author: John Lomi
 """
+
+#setup GPIO
+GPIO.setmode(GPIO.BCM)
+limit = 21
+GPIO.setup(limit, GPIO.IN)
 
 #setup camera
 rawCap = None
@@ -173,57 +179,12 @@ def triggered():
         arm.send("false")#placeholder for checking limit
     print("Poke Completed")
     
-def moveToCode(val, blocks):
-    """Move to where the QR code of value val is suspected to be
-
-    Arguments:
-    val -- the code value to move to
-    blocks -- the locations of all the blocks in the tower
-    """
-    #find QR code in main array
-
-    #move to selected position
-
-    pass
-
-
-def scanTower():
-    """Use camera to generate matrix to represent block posistions"""
-    #this is just a placeholder.  It should move the arm up the tower and
-    #use takePictureQR to generate this matrix of codes.  This is supposed
-    #to be like a map of the blocks
-    tower = [[1, 2, 3],
-            [4, 5, 6],
-            [7, 8, 9],
-            [10, 11, 12],
-            [13, 14, 15],
-            [16, 17, 18],
-            [19, 20, 21],
-            [22, 23, 24],
-            [25, 26, 27],
-            [28, 29, 30],
-            [31, 32, 33],
-            [34, 35, 36],
-            [37, 38, 39],
-            [40, 41, 42],
-            [43, 44, 45],
-            [46, 47, 48],
-            [49, 50, 51],
-            [52, 53, 54],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]]
-
-    return tower
-
 
 
 
 def main():
     """Algorithm to play Jenga using the ABB arm"""
-    global arm, comp
+    global arm, comp, limit
 
     """
     Use arm.send() and comp.send() to send stuff
@@ -236,43 +197,75 @@ def main():
     #define camera settings
     initializeCamera()
 
-    #find tower in workspace
-    towerlocation = [0, 0, 0]
-
-    #scan tower
-    blockPos = scanTower()
 
     #loop until game over
     while not gameOver:
         #wait for code number
-        val = comp.recv(16)
+        val = comp.recv(1024)
 
-        #move to block
-        moveToCode(val, blockPos)
+        #send block value to arm
+        arm.send("poke% {}, #".format(val))
 
-        #take picture
-        codeList = takePictureQR()
+        #check limit switch
+        data = arm.recv(1024)
+        print(data)
 
-        #if gameover, continue
-        if not codeList:
-            gameOver = True
-            print("GAMEOVER: No codes found")
-            continue 
+        if data == "trigger":
+            if GPIO.input(limit):
+                arm.send("true")
+            else:
+                arm.send("false")
+        
+        #check limit switch
+        data = arm.recv(1024)
+        print(data)
+        if data == "trigger":
+            if GPIO.input(limit):
+                arm.send("true")
+            else:
+                arm.send("false")
 
-        #find desired code
-        for code in codeList:
-            if code[2] == val:
-                codeX = code[0]
-                codeY = code[1]
-                break
-        else:
-            gameOver = True
-            print("GAMEOVER: Code not in image")
-            continue
+        #check limit switch
+        data = arm.recv(1024)
+        print(data)
+        if data == "trigger":
+            if GPIO.input(limit):
+                arm.send("true")
+            else:
+                arm.send("false")
 
-        #make adjustments
-        diffX = codeX - 640
-        diffY = codeY - 360
+
+        data = arm.recv(1024)
+        print(data)
+        
+
+        # msg3 = "moveAround% x,#"
+        # arm.send(msg3)
+        # data = arm.recv(1024)
+        # print(data)
+
+
+
+        # #if gameover, continue
+        # if not codeList:
+        #     gameOver = True
+        #     print("GAMEOVER: No codes found")
+        #     continue 
+
+        # #find desired code
+        # for code in codeList:
+        #     if code[2] == val:
+        #         codeX = code[0]
+        #         codeY = code[1]
+        #         break
+        # else:
+        #     gameOver = True
+        #     print("GAMEOVER: Code not in image")
+        #     continue
+
+        # #make adjustments
+        # diffX = codeX - 640
+        # diffY = codeY - 360
 
         #push
 
