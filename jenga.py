@@ -116,10 +116,11 @@ def takePictureQR():
 
     return results
 
-def runMultipleCommands():
+def runMultipleCommands(string):
     #run various movement messages
     #msg1 = "setPokeOffset%#"
-    msg2 = "poke% 0, 0, 0, 0, 0, 0, 0, y,#"
+    #poke takes like ColumnxRow
+    
 ##    msg3 = ""
 ##    msg4 = ""
 ##    arm.send(msg1)
@@ -127,7 +128,7 @@ def runMultipleCommands():
 ##    data = arm.recv(1024)
 ##    print(data)
 
-    arm.send(msg2)
+    arm.send(string)
     data = arm.recv(1024)
     print(data)
 
@@ -142,6 +143,11 @@ def runMultipleCommands():
     print(data)
     if data == "trigger":
         arm.send("false")
+    data = arm.recv(1024)
+    print(data)
+
+    msg3 = "moveAround% x,#"
+    arm.send(msg3)
     data = arm.recv(1024)
     print(data)
     
