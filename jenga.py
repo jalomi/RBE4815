@@ -145,11 +145,38 @@ def runMultipleCommands(string):
         arm.send("false")
     data = arm.recv(1024)
     print(data)
+    data = arm.recv(1024)
+    print(data)
 
     msg3 = "moveAround% x,#"
     arm.send(msg3)
     data = arm.recv(1024)
     print(data)
+
+##    arm.send(string2)
+##    data = arm.recv(1024)
+##    print(data)
+##
+##    if data == "trigger":
+##        arm.send("false")
+##        
+##    data = arm.recv(1024)
+##    print(data)
+##    if data == "trigger":
+##        arm.send("false")
+##    data = arm.recv(1024)
+##    print(data)
+##    if data == "trigger":
+##        arm.send("false")
+##    data = arm.recv(1024)
+##    print(data)
+##    data = arm.recv(1024)
+##    print(data)
+##
+##    msg4 = "moveAround% x,#"
+##    arm.send(msg3)
+##    data = arm.recv(1024)
+##    print(data)
     
     
 ##    arm.send(msg3)
@@ -162,6 +189,20 @@ def runMultipleCommands(string):
 
 def runSingleCommand(string):
     arm.send(string)
+    data = arm.recv(1024)
+    print(data)
+
+    if data == "trigger":
+        arm.send("false")
+        
+    data = arm.recv(1024)
+    print(data)
+    if data == "trigger":
+        arm.send("false")
+    data = arm.recv(1024)
+    print(data)
+    if data == "trigger":
+        arm.send("false")
     data = arm.recv(1024)
     print(data)
 
