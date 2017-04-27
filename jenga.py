@@ -25,6 +25,28 @@ def initializeServers():
     """Set up TCP/IP Servers for arm and computer"""
     global arm, comp
 
+
+    #connect to computer
+    s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    print("Socket created")
+
+    try:
+       s2.bind(('',5001))
+    except socket.error as msg:
+       print(str(msg[0]) + ":" + msg[1])
+
+    print("Socket binded")
+
+    s2.listen(10)
+
+    print("Socket listening")
+
+
+    comp, addr2 = s2.accept()
+    print("Comp Connected: " + addr2[0] + ":" + str(addr2[1]))
+
+    
     #Connect to arm
     s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
@@ -46,25 +68,6 @@ def initializeServers():
     print("Arm Connected: " + addr1[0] + ":" + str(addr1[1]))
 
     
-    #connect to computer
-##    s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-##
-##    print("Socket created")
-##
-##    try:
-##        s2.bind(('',5001))
-##    except socket.error as msg:
-##        print(str(msg[0]) + ":" + msg[1])
-##
-##    print("Socket binded")
-##
-##    s2.listen(10)
-##
-##    print("Socket listening")
-##
-##
-##    comp, addr2 = s2.accept()
-##    print("Comp Connected: " + addr2[0] + ":" + str(addr2[1]))
 
 
 
@@ -140,58 +143,78 @@ def main():
     #define camera settings
     initializeCamera()
 
+    try:
+        #loop until game over
+        while not gameOver:
+            #wait for code number
+            val = comp.recv(1024)
+            comp.send(val)
+            place = comp.recv(1024)
+            comp.send(place)
+            print("Comp: {}".format(val))
 
-    #loop until game over
-    while not gameOver:
-        #wait for code number
-        val = comp.recv(1024)
+            #send block value to arm
+            arm.send("poke% {}, x, #".format(val))
 
-        #send block value to arm
-        arm.send("poke% {}, #".format(val))
+            #check limit switch
+            data = arm.recv(1024)
+            print(data)
 
-        #check limit switch
-        data = arm.recv(1024)
-        print(data)
+            if data == "trigger":
+                if not GPIO.input(limit):
+                    arm.send("true")
+                else:
+                    arm.send("false")
+                    comp.send("failed")
+                    print("Poke hit limit switch")
+                    continue
+            
+            #check limit switch
+            data = arm.recv(1024)
+            print(data)
+            if data == "trigger":
+                if not GPIO.input(limit):
+                    arm.send("true")
+                else:
+                    arm.send("false")
+                    comp.send("failed")
+                    print("Poke hit limit switch")
+                    continue
 
-        if data == "trigger":
-            if GPIO.input(limit):
-                arm.send("true")
-            else:
-                arm.send("false")
-                comp.send("failed")
-                print("Poke hit limit switch")
-                continue
-        
-        #check limit switch
-        data = arm.recv(1024)
-        print(data)
-        if data == "trigger":
-            if GPIO.input(limit):
-                arm.send("true")
-            else:
-                arm.send("false")
-                comp.send("failed")
-                print("Poke hit limit switch")
-                continue
-
-        #check limit switch
-        data = arm.recv(1024)
-        print(data)
-        if data == "trigger":
-            if GPIO.input(limit):
-                arm.send("true")
-            else:
-                arm.send("false")
-                comp.send("failed")
-                print("Poke hit limit switch")
-                continue
+            #check limit switch
+            data = arm.recv(1024)
+            print(data)
+            if data == "trigger":
+                if not GPIO.input(limit):
+                    arm.send("true")
+                else:
+                    arm.send("false")
+                    comp.send("failed")
+                    print("Poke hit limit switch")
+                    continue
 
 
-        data = arm.recv(1024)
-        print(data)
+            data = arm.recv(1024)
+            print(data)
 
-        #wait for next instruction
-        #end while
+            data = arm.recv(1024)
+            print(data)
+            
+            #move robot to other side in order to grab
+            arm.send("moveAround% x, {}, #".format(place))
+
+            data = arm.recv(1024)
+            print(data)
+
+            
+
+            break
+
+            #wait for next instruction
+            #end while
+    except KeyboardInterrupt:
+        comp.close()
+        arm.close()
 
 
 
