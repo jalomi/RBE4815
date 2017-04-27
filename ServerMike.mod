@@ -26,19 +26,22 @@ MODULE ServerMike
     VAR socketdev clientSocket;
     VAR socketdev serverSocket;
     
-    PERS string ipController:= "192.168.125.3"; !local IP for testing in simulation
+    PERS string ipController:= "192.168.1.144"; !local IP for testing in simulation
     PERS num serverPort:= 5515;
     
     !Jenga block dimensions
-    PERS num towerOffset := 40; !75mm offset from poker to tower distance at start of approach
+    PERS num towerOffset := 45; !75mm offset from poker to tower distance at start of approach
     PERS num towerGripOffset := 40; !mm for offset from gripper to tower
     PERS num length := 75; !block length
-    PERS num width := 25; !block width
+    PERS num width := 27; !block width
+    PERS num thiccness := 15; !block thickness
     PERS num gripperOffset := 13; !difference in reach length between poker and gripper
-    PERS num aboveTower := 300; !mm above tower for movearound
+    VAR num aboveTower := 800; !mm above tower for movearound
     PERS num lengthTool := 300; !mm of length of tooling
+    PERS num pokeAmount := 13;
+    PERS num grabAndPlace := 110; !mm to move out after grab and move in for place
     
-    PERS num zGrab := 56.61;
+    PERS num zGrab := 57;
     VAR extjoint externalAxis;
     
     PERS robtarget pokeOffset; !true offset
@@ -46,7 +49,7 @@ MODULE ServerMike
     PERS robtarget grabXOffset; !grab offset in x dir
     PERS robtarget pokeYOffset; !poke offset in y dir
     PERS robtarget grabYOffset; !grab offset in y dir
-    
+    PERS robtarget placeOffset;
     
     !Motion
     VAR bool moveCompleted; !true if move successful
@@ -59,6 +62,8 @@ MODULE ServerMike
     VAR string params{9}; !collection of parameters for movement goes up to 8 cuz the python lib had something similar plus one for end character to indicate end of params
     VAR string commandType;
     VAR num numParams:= 0; !number of paramters
+    VAR num placeLayer:= 6; !initially 5
+    VAR num taken{3} := [0,0,0]; !keeps track of taken place locations
     
     PROC ParseString(string msg) 
         VAR num barrier;
@@ -120,11 +125,11 @@ MODULE ServerMike
         currentZone := [FALSE, 0.3, 0.3,0.3,0.03,0.3,0.03]; !z0
         
         pokeOffset := [[0,0,0],[0,0,0,0],[0,0,0,0],externalAxis]; !true offset
-        pokeXOffset := [[-581.11,-965.31,420.5],[0.001,0.024,1,0.001],[0,0,0,0],externalAxis]; !poke offset in x dir
-        grabXOffset := [[-209.49,-974.43,363.89],[0.483,0.508,-0.513,-0.496],[0,0,0,0],externalAxis]; !grab offset in x dir
+        pokeXOffset := [[-568.0,-968.6,331.2],[0.00112,0.02398,0.99971,0.00121],[0,0,0,0],externalAxis]; !poke offset in x dir
+        grabXOffset := [[-212.1,-974.5,272.2],[0.483,0.508,-0.513,-0.496],[0,0,0,0],externalAxis]; !grab offset in x dir
         pokeYOffset := [[-318.32,-1153.4,316.18],[0.483,0.508,-0.513,-0.496],[0,0,0,0],externalAxis]; !poke offset in y dir
-        grabYOffset := [[-369.23,-800.90,315.51],[0.705,0.709,-0.013,-0.005],[0,0,0,0],externalAxis]; !grab offset in y dir
-        
+        grabYOffset := [[-370.9,-811.3,430.6],[0.71399,0.69931,-0.03174,-0.01376],[0,0,0,0],externalAxis]; !grab offset in y dir
+        placeOffset := [[-369.23,-800.90,315.51],[0.705,0.709,-0.013,-0.005],[0,0,0,0],externalAxis]; !placeOffset for placing gets set to respective grab for a given stage
         
         
         
@@ -150,9 +155,13 @@ MODULE ServerMike
         
         VAR jointtarget jointsPose;
         VAR num coors{9};
+        
+        VAR num chosenPlace;
+        
         VAR bool ok;
         VAR num pokeCount := 0; !number of times its checked with pi for limit
         VAR bool triggered := FALSE;
+        
         
         !Motion Config
         ConfL \Off;
@@ -237,10 +246,15 @@ MODULE ServerMike
                     TPWrite "Released";
                 CASE "moveAround":
                     TPWrite "Moving Around...";
-                    IF numParams = 1 THEN
+                    IF numParams = 2 THEN
+                            
+                            ok := StrToVal(params{2},chosenPlace);
+                            taken{chosenPlace} := 1;
+                            
                             !first move up
-                            coors{3} := coors{3} + aboveTower; !goes up 900 mm
-                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            !coors{3} := aboveTower; !goes up 900 mm
+                            !z is just set to height above tower
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
@@ -269,11 +283,11 @@ MODULE ServerMike
                             !coors{7} := cartesianPose.rot.q4;
                             
                             coors{1} := coors{1} + towerOffset + towerOffset + length + lengthTool; !might be an issue not going far enough?
-                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
-                            TPWrite "Moved to Point 3";
+                            TPWrite "Moved to Point 3 part a";
                             WaitTime 0.5;
                             
                             !set to current joint angles to not mess with linear movement
@@ -282,34 +296,242 @@ MODULE ServerMike
                             !jointXCoors{2} := jointsPose.robax.rax_2;
                             !jointXCoors{3} := jointsPose.robax.rax_3;
                             
-                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[grabXOffset.rot.q1,grabXOffset.rot.q2,grabXOffset.rot.q3,grabXOffset.rot.q4],[0,0,0,0],externalAxis];
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}-zGrab],[grabXOffset.rot.q1,grabXOffset.rot.q2,grabXOffset.rot.q3,grabXOffset.rot.q4],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
-                            TPWrite "Moved to Point 3";
+                            TPWrite "Moved to Point 3 part b";
                             WaitTime 0.5;
                             
-                            coors{3} := pokeOffset.trans.z - zGrab; !go back down should message 
+                            !lower speed for pull out
+                            currentSpeed.v_tcp:=50;
                             
-                            coors{1} := 0; !might be wrong math so make sure to check (minus 21 for block extruding)
+                            coors{3} := pokeOffset.trans.z - zGrab + coors{3}; !go back down should message (offset - grab difference + offset from choice - the above tower that altered it before)
+                            
+                            coors{1} := -4; !might be wrong math so make sure to check (minus 21 for block extruding) - 4 for a little more
                             TPWrite "Moving to grab...";
                             cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
                             TPWrite "Moved to grab";
+                            WaitTime 1.5;
                             !grab
-                            !add code here
+                            SetDO D652_10_DO1, 0;
+                            WaitTime 1.5;
                             TPWrite "I grabbed it";
                             
+                            
+                            IF coors{2} = 0 THEN
+                                TPWrite "Doing the shimmy...";
+                                coors{2} := coors{2} + 1;
+                                cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                moveCompleted := FALSE;
+                                MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                moveCompleted := TRUE;
+                                WaitTime 0.5;
+                                
+                                coors{2} := coors{2} - 2;
+                                cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                moveCompleted := FALSE;
+                                MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                moveCompleted := TRUE;
+                                WaitTime 0.5;
+                                
+                                coors{2} := coors{2} + 1;
+                                cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                moveCompleted := FALSE;
+                                MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                moveCompleted := TRUE;
+                                WaitTime 0.5;
+                                
+                                TPWrite "Shimmy Complete";
+                            ENDIF
+                            
+                            !TPWrite "It's loose";
+                            !TPWrite "Hi Chase";
                             TPWrite "Pulling block out";
-                            coors{1} := coors{1} + 90; !using 90 to be safe distance
-                            cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            IF coors{2} <> 0 THEN
+                                IF coors{2} < 0 THEN
+                                    
+                                    coors{2} := coors{2} - grabAndPlace;
+                                    !made the edit to z down in the actual structure
+                                    cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                    moveCompleted := FALSE;
+                                    MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                    moveCompleted := TRUE;
+                                
+                                    TPWrite "Pulled out side";
+                                    WaitTime 0.5;
+                                    
+                                    coors{1} := coors{1} + grabAndPlace + 4; !using 90 to be safe distance
+                                    !made the edit to z down in the actual structure
+                                    cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                    moveCompleted := FALSE;
+                                    MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                    moveCompleted := TRUE;
+                                
+                                    TPWrite "Pulled back";
+                                    WaitTime 0.5;
+                                    
+                                    coors{2} := coors{2} + grabAndPlace;
+                                    
+                                ELSEIF coors{2} > 0 THEN
+                                    coors{2} := coors{2} + grabAndPlace;
+                                    !made the edit to z down in the actual structure
+                                    cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                    moveCompleted := FALSE;
+                                    MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                    moveCompleted := TRUE;
+                                
+                                    TPWrite "Pulled out side";
+                                    WaitTime 0.5;
+                                    
+                                    coors{1} := coors{1} + grabAndPlace + 4; !using 90 to be safe distance
+                                    !made the edit to z down in the actual structure
+                                    cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                    moveCompleted := FALSE;
+                                    MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                    moveCompleted := TRUE;
+                                
+                                    TPWrite "Pulled back";
+                                    WaitTime 0.5;
+                                    
+                                    coors{2} := coors{2} - grabAndPlace;
+                                ENDIF
+                            
+                            ELSE
+                                coors{1} := coors{1} + grabAndPlace + 4; !using 90 to be safe distance
+                                !made the edit to z down in the actual structure
+                                cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},coors{3}],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                                moveCompleted := FALSE;
+                                MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                                moveCompleted := TRUE;
+                            
+                                TPWrite "Pulled out";
+                                WaitTime 0.5;
+                            ENDIF
+                            
+                            
+                            
+                            
+                            currentSpeed.v_tcp:= 100;
+                            
+                            TPWrite "Beginning place....";
+                            TPWrite "Moving above tower...";
+                            cartesianTarget := [[grabXOffset.trans.x + coors{1},grabXOffset.trans.y +coors{2},aboveTower],[grabXOffset.rot.q1+coors{4},grabXOffset.rot.q2+coors{5},grabXOffset.rot.q3+coors{6},grabXOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
+                            WaitTime 0.5;
                             
-                            TPWrite "Pulled out";
+                            
+                            jointsPose := CJointT();
+                            jointsTarget:=[[jointsPose.robax.rax_1,jointsPose.robax.rax_2,jointsPose.robax.rax_3,50,jointsPose.robax.rax_5,jointsPose.robax.rax_6], externalAxis];
+                        
+                            moveCompleted := FALSE;
+                            MoveAbsJ jointsTarget, currentSpeed, currentZone, currentTool \Wobj:=currentWobj;
+                            moveCompleted := TRUE;
+                            !PLACE MOVEMENT BEGINS
+                            !check if middle is taken
+                            !FOR i FROM 1 TO Dim(taken,1) DO
+                            !    IF taken{i} = 0 THEN
+                            !        coors{2} := (i-2)*width;
+                            !        taken{i} := 1;
+                            !        placeOffset := grabYOffset;
+                            !        Break;
+                            !    ENDIF
+                            !ENDFOR
+                            
+                            !Looks for chosen placement
+                            IF taken{1} = 1 THEN
+                                coors{1} := -1*width;
+                                placeOffset := grabYOffset;
+                                taken{1} := 0;
+                            ELSEIF taken{2} = 1 THEN
+                                coors{1} := 0;
+                                placeOffset := grabYOffset;
+                                taken{2} := 0;
+                            ELSEIF taken{3} = 1 THEN
+                                coors{1} := 1*width;
+                                placeOffset := grabYOffset;
+                                taken{3} := 0;
+                            ELSE
+                                !NEVER GETS HERE RIGHT NOW MIGHT NEED ROW FROM GUI TO HANDLE INCREMENTING layer
+                                TPWrite "I shouldn't be here";
+                                TPWrite "Moving up a level";
+                                taken := [0,0,0];
+                                Incr placeLayer;
+                            ENDIF
+                            
+                            TPWrite "Above tower and moving in...";
+                            coors{2} := 0;
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},aboveTower],[placeOffset.rot.q1+coors{4},placeOffset.rot.q2+coors{5},placeOffset.rot.q3+coors{6},placeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            WaitTime 0.5;
+                            
+                            TPWrite "Coming down...";
+                            coors{3} := placeLayer*thiccness*2 + pokeOffset.trans.z - zGrab - 26;
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},coors{3}],[placeOffset.rot.q1+coors{4},placeOffset.rot.q2+coors{5},placeOffset.rot.q3+coors{6},placeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            WaitTime 1.0;
+                            !release gripper
+                            SetDO D652_10_DO1, 1;
+                            WaitTime 1.5;
+                            
+                            TPWrite "Pulling back for push...";
+                            coors{2} := coors{2} + grabAndPlace; !using 90 to be safe distance
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},coors{3}],[placeOffset.rot.q1+coors{4},placeOffset.rot.q2+coors{5},placeOffset.rot.q3+coors{6},placeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            !closing gripper for push
+                            WaitTime 0.5;
+                            SetDO D652_10_DO1, 0;
+                            WaitTime 1.5;
+                            
+                            TPWrite "Pushing...";
+                            coors{2} := coors{2} - grabAndPlace; !hopefully enough push
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},coors{3}],[placeOffset.rot.q1+coors{4},placeOffset.rot.q2+coors{5},placeOffset.rot.q3+coors{6},placeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            WaitTime 0.5;
+                            !handle the place layer being taken in the give space
+                            !add code
+                            !handle the above tower increase
+                            !MAYBE ADD INCREASE TO ABOVE TOWER MOVEMENT
+                            
+                            TPWrite "Pull out for clearence...";
+                            coors{2} := coors{2} + grabAndPlace + 5; !pull back
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},coors{3}],[placeOffset.rot.q1+coors{4},placeOffset.rot.q2+coors{5},placeOffset.rot.q3+coors{6},placeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            WaitTime 0.5;
+                            
+                            !move to above tower and move to other side
+                            !z is just set to height above tower
+                            cartesianTarget := [[placeOffset.trans.x + coors{1},placeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            TPWrite "Moved up and rotated for next poke";
+                            WaitTime 0.5; !wait before next move
+                            
+                            TPWrite "Moving to next poke side...";
+                            coors{1} := coors{1} - towerOffset - towerOffset - length - lengthTool + 100; !might not be enough depending
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            TPWrite "Moved poke side for next poke";
+                            TPWrite "Ready for next poke command";
+                            WaitTime 0.5;
                             
                         ELSEIF params{1} = "y" THEN
                             
@@ -331,11 +553,11 @@ MODULE ServerMike
                             !coors{7} := cartesianPose.rot.q4;
                             
                             coors{2} := coors{2} + towerOffset + towerOffset + length + lengthTool;
-                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
-                            TPWrite "Moved to Point 3";
+                            TPWrite "Moved to Point 3 part b";
                             WaitTime 0.5;
                             !set to current joint angles to not mess with linear movement
                             
@@ -344,14 +566,14 @@ MODULE ServerMike
                             !jointXCoors{2} := jointsPose.robax.rax_2;
                             !jointXCoors{3} := jointsPose.robax.rax_3;
                             
-                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[grabYOffset.rot.q1,grabYOffset.rot.q2,grabYOffset.rot.q3,grabYOffset.rot.q4],[0,0,0,0],externalAxis];
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}-zGrab],[grabYOffset.rot.q1,grabYOffset.rot.q2,grabYOffset.rot.q3,grabYOffset.rot.q4],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
-                            TPWrite "Moved to Point 3";
+                            TPWrite "Moved to Point 3 part b";
                             WaitTime 0.5;
                             
-                            coors{3} := pokeOffset.trans.z - zGrab; !go back down
+                            coors{3} := pokeOffset.trans.z - zGrab + coors{3}; !go back down (poke offset minus difference between poker and gripper and the add the offset from z direction)
                             
                             coors{2} := 0; !check math here or you might regret it (minus 21 for block extruding)
                             TPWrite "Moving to grab...";
@@ -360,18 +582,48 @@ MODULE ServerMike
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
                             TPWrite "Moved to grab";
+                            WaitTime 1.5;
                             !grab
-                            Set D652_10_DO1;
+                            SetDO D652_10_DO1, 0;
+                            WaitTime 1.5;
                             TPWrite "I grabbed it";
                             
+                            
+                            
                             TPWrite "Pulling block out";
-                            coors{2} := coors{2} + 90; !using 90 to be safe distance
+                            coors{2} := coors{2} + 110; !using 90 to be safe distance
                             cartesianTarget := [[grabYOffset.trans.x + coors{1},grabYOffset.trans.y +coors{2},coors{3}],[grabYOffset.rot.q1+coors{4},grabYOffset.rot.q2+coors{5},grabYOffset.rot.q3+coors{6},grabYOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
                             moveCompleted := TRUE;
                             
                             TPWrite "Pulled out";
+                            WaitTime 0.5;
+                            !!!!!!!!!!!!
+                            !NEED DROP CODE HERE
+                            !release gripper
+                            !!!!!!!!!!!!
+                            SetDO D652_10_DO1, 1;
+                            WaitTime 1.5;
+                            !move to above tower and move to other side
+                            !z is just set to height above tower
+                            cartesianTarget := [[grabYOffset.trans.x + coors{1},grabYOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            TPWrite "Moved up and rotated for next poke";
+                            WaitTime 0.5; !wait before next move
+                            
+                            TPWrite "Moving to next poke side...";
+                            coors{2} := coors{2} - towerOffset - towerOffset - length - lengthTool; !might not be enough depending
+                            cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},aboveTower],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
+                            moveCompleted := FALSE;
+                            MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
+                            moveCompleted := TRUE;
+                            TPWrite "Moved poke side for next poke";
+                            TPWrite "Ready for next poke command";
+                            WaitTime 0.5;
+                            
                             
                         ELSE
                             TPWrite "Bad msg, didn't give a good coordinate";
@@ -416,20 +668,52 @@ MODULE ServerMike
                 CASE "poke": !poke tower
                     TPWrite "Poke commencing...";
                     !initial positioning in front of block
-                    IF numParams = 8 and pokeCount = 0 THEN
+                    !goes to block at column x row
+                    IF numParams = 3 and pokeCount = 0 THEN
                         !convert string values into num values
-                        ok := StrToVal(params{1},coors{1});
-                        ok := StrToVal(params{2},coors{2});
-                        ok := StrToVal(params{3},coors{3});
-                        ok := StrToVal(params{4},coors{4});
-                        ok := StrToVal(params{5},coors{5});
-                        ok := StrToVal(params{6},coors{6});
-                        ok := StrToVal(params{7},coors{7});
+                        !ok := StrToVal(params{1},coors{1});
+                        !ok := StrToVal(params{2},coors{2});
+                        !ok := StrToVal(params{3},coors{3});
+                        !ok := StrToVal(params{4},coors{4});
+                        !ok := StrToVal(params{5},coors{5});
+                        !ok := StrToVal(params{6},coors{6});
+                        !ok := StrToVal(params{7},coors{7});
                         
-                        IF params{8} = "x" THEN
+                        !OPEN gripper if it isnt already
+                        SetDO D652_10_DO1, 1;
+                        WaitTime 0.5;
+                        IF params{3} = "x" THEN
                             pokeOffset := pokeXOffset;
-                        ELSEIF params{8} = "y" THEN
+                            !set offset
+                            !grab column for y and row for z
+                            ok := StrToVal(params{1},coors{2});
+                            ok := StrToVal(params{2},coors{3});
+                            
+                            coors{2}:= -1 * (coors{2} - 2);
+                            coors{3}:= (coors{3}/2) - 4;
+                            
+                            coors{3} := coors{3}*thiccness*2;
+                            coors{2} := coors{2}*width;
+                            coors{1} := 0;
+                            coors{4} := 0;
+                            coors{5} := 0;
+                            coors{6} := 0;
+                            coors{7} := 0;
+                            
+                        ELSEIF params{3} = "y" THEN
                             pokeOffset := pokeYOffset;
+                            !set offset
+                            !grab column for x and row for z
+                            ok := StrToVal(params{1},coors{1});
+                            ok := StrToVal(params{2},coors{3});
+                            
+                            coors{3} := coors{3}*thiccness*2;
+                            coors{1} := coors{1}*width;
+                            coors{2} := 0;
+                            coors{4} := 0;
+                            coors{5} := 0;
+                            coors{6} := 0;
+                            coors{7} := 0;
                         ELSE
                             TPWrite "not x or y param";
                         ENDIF
@@ -455,9 +739,9 @@ MODULE ServerMike
                             TPWrite "Moving up on tower";
                             !check if poke is occuring along x or y
                             !tower will have to be placed so that its parallel to the axis of the wobj
-                            IF params{8} = "y" THEN
+                            IF params{3} = "y" THEN
                                 coors{2} := coors{2} + towerOffset; ! might need to be subtracting depending on directions
-                            ELSEIF params{8} = "x" THEN
+                            ELSEIF params{3} = "x" THEN
                                 coors{1} := coors{1} + towerOffset; ! might need to be subtracting depending on directions
                             ELSE
                                 TPWrite "Do not recognize poke direction";
@@ -474,12 +758,16 @@ MODULE ServerMike
                                 triggered := TRUE;
                             ENDIF
                             TPWrite "Moved up on tower successfully";
+                            TPWrite "You better not shout, you better not cry";
+                            WaitTime 0.5;
+                            TPWrite "You better not pout, I'm coming in dry...";
+                            
                         ELSEIF pokeCount = 1 AND triggered = FALSE THEN
                             !move slightly further to engage more poke
                             TPWrite "Giving tower just the tip";
-                            IF params{8} = "y" THEN
+                            IF params{3} = "y" THEN
                                 coors{2} := coors{2} + 1; ! might need to be subtracting depending on directions
-                            ELSEIF params{8} = "x" THEN
+                            ELSEIF params{3} = "x" THEN
                                 coors{1} := coors{1} + 1; ! might need to be subtracting depending on directions
                             ELSE
                                 TPWrite "Do not recognize poke direction";
@@ -499,12 +787,12 @@ MODULE ServerMike
                         ELSEIF pokeCount = 2 AND triggered = FALSE THEN
                             !move for full poke
                             TPWrite "Going full poke...";
-                            IF params{8} = "y" THEN
+                            IF params{3} = "y" THEN
                                 !move by half block size minus the 1 mm from first poke attempt
-                                coors{2} := coors{2} + 20; ! might need to be subtracting depending on directions
-                            ELSEIF params{8} = "x" THEN
+                                coors{2} := coors{2} + pokeAmount; ! might need to be subtracting depending on directions
+                            ELSEIF params{3} = "x" THEN
                                 !move by half block size minus the 1 mm from first poke attempt
-                                coors{1} := coors{1} + 20; ! might need to be subtracting depending on directions
+                                coors{1} := coors{1} + pokeAmount; ! might need to be subtracting depending on directions
                             ELSE
                                 TPWrite "Do not recognize poke direction";
                             ENDIF
@@ -523,8 +811,26 @@ MODULE ServerMike
                         ELSE
                             !triggered so needs to go back to before poke
                             TPWrite "Triggered limit";
-                            ok := StrToVal(params{1},coors{1});
-                            ok := StrToVal(params{2},coors{2});
+                            IF params{3} = "y" THEN
+                                !resset back to before poke
+                                ok := StrToVal(params{1},coors{1});
+                                ok := StrToVal(params{2},coors{3});
+                                
+                                coors{3} := coors{3}*thiccness*2;
+                                coors{1} := coors{1}*width;
+                                coors{2} := 0;
+                            ELSEIF params{3} = "x" THEN
+                                !reset back to before poke
+                                ok := StrToVal(params{1},coors{2});
+                                ok := StrToVal(params{2},coors{3});
+                                
+                                coors{3} := coors{3}*thiccness*2;
+                                coors{2} := coors{2}*width;
+                                coors{1} := 0;
+                            ELSE
+                                TPWrite "Do not recognize poke direction";
+                            ENDIF
+                            
                             cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                             moveCompleted := FALSE;
                             MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;
@@ -537,8 +843,25 @@ MODULE ServerMike
                     ENDWHILE
                     !go back to before poke after completeing poke
                     TPWrite "Pulling out...";
-                    ok := StrToVal(params{1},coors{1});
-                    ok := StrToVal(params{2},coors{2});
+                    IF params{3} = "y" THEN
+                        !resset back to before poke
+                        ok := StrToVal(params{1},coors{1});
+                        ok := StrToVal(params{2},coors{3});
+                        
+                        coors{3} := coors{3}*thiccness*2;
+                        coors{1} := coors{1}*width;
+                        coors{2} := 0;
+                    ELSEIF params{3} = "x" THEN
+                        !reset back to before poke
+                        ok := StrToVal(params{1},coors{2});
+                        ok := StrToVal(params{2},coors{3});
+                        
+                        coors{3} := coors{3}*thiccness*2;
+                        coors{2} := coors{2}*width;
+                        coors{1} := 0;
+                    ELSE
+                        TPWrite "Do not recognize poke direction";
+                    ENDIF
                     cartesianTarget := [[pokeOffset.trans.x + coors{1},pokeOffset.trans.y +coors{2},pokeOffset.trans.z+coors{3}],[pokeOffset.rot.q1+coors{4},pokeOffset.rot.q2+coors{5},pokeOffset.rot.q3+coors{6},pokeOffset.rot.q4+coors{7}],[0,0,0,0],externalAxis];
                     moveCompleted := FALSE;
                     MoveL cartesianTarget,currentSpeed,currentZone,currentTool \WObj:=currentWobj;

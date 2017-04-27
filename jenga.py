@@ -127,7 +127,6 @@ def takePictureQR():
 
 
 
-
 def main():
     """Algorithm to play Jenga using the ABB arm"""
     global arm, comp, limit

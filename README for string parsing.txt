@@ -19,10 +19,15 @@ circmove (move in circular)
 grab (will grab or release)
 	will write DO line write once we have the necessary info
 	
-poke (will move linearly to slowly poke the tower)
-	will do MoveL at a slower speed to approach the tower (might need to move a step 
-	wait then move a step because moveL might be locking)
+poke (will move to poke location)
 
+	params: 3 ( column, row, dir) 
+		column and row are based off of the origin point which is calculated and determined at the begining
+		dir refers to the side of the tower the bot is playing on (x or y)
+		
+	python:
+		jenga.runSingleCommand("poke% 0, 0, x,#");
+moveAround (moveAround the tower over the top)
 	
 Sets will still need work but based off the library:
 
@@ -35,4 +40,6 @@ getcart (get cartesian coordinate)
 	takes 0 params
 getjoint (gets the joints 420 blaze)
 	takes 0 params
-	
+
+Python test code:
+runMultipleCommands("poke% 0, 0, x,#") // should move around after poke
